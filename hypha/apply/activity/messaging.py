@@ -9,6 +9,7 @@ from django.contrib.auth import get_user_model
 from django.db import models
 from django.template.loader import render_to_string
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 from .models import ALL, TEAM
 from .options import MESSAGES
@@ -35,7 +36,7 @@ def reviewers_message(reviewers):
     for role, reviewers in group_reviewers(reviewers).items():
         message = ', '.join(str(reviewer) for reviewer in reviewers)
         if role:
-            message += ' as ' + str(role)
+            message += _(' as {role}').format(role=str(role))
         message += '.'
         messages.append(message)
     return messages
@@ -275,21 +276,21 @@ class ActivityAdapter(AdapterBase):
         return {}
 
     def reviewers_updated(self, added=list(), removed=list(), **kwargs):
-        message = ['Reviewers updated.']
+        message = [_('Reviewers updated.')]
         if added:
-            message.append('Added:')
+            message.append(_('Added:'))
             message.extend(reviewers_message(added))
 
         if removed:
-            message.append('Removed:')
+            message.append(_('Removed:'))
             message.extend(reviewers_message(removed))
 
         return ' '.join(message)
 
     def batch_reviewers_updated(self, added, **kwargs):
-        base = ['Batch Reviewers Updated.']
+        base = [_('Batch Reviewers Updated.')]
         base.extend([
-            f'{str(user)} as {role.name}.'
+            _('{user} as {name}.').format(user=str(user), name=role.name)
             for role, user in added
             if user
         ])
@@ -307,11 +308,11 @@ class ActivityAdapter(AdapterBase):
         submissions_text = ', '.join(
             [submission.title for submission in submissions]
         )
-        return f'Successfully deleted submissions: {submissions_text}'
+        return _('Successfully deleted submissions: {title}').format(title=submissions_text)
 
     def handle_transition(self, old_phase, source, **kwargs):
         submission = source
-        base_message = 'Progressed from {old_display} to {new_display}'
+        base_message = _('Progressed from {old_display} to {new_display}')
 
         new_phase = submission.phase
 
@@ -345,20 +346,20 @@ class ActivityAdapter(AdapterBase):
             return self.handle_transition(old_phase=old_phase, source=submission, **kwargs)
 
     def partners_updated(self, added, removed, **kwargs):
-        message = ['Partners updated.']
+        message = [_('Partners updated.')]
         if added:
-            message.append('Added:')
+            message.append(_('Added:'))
             message.append(', '.join([str(user) for user in added]) + '.')
 
         if removed:
-            message.append('Removed:')
+            message.append(_('Removed:'))
             message.append(', '.join([str(user) for user in removed]) + '.')
 
         return ' '.join(message)
 
     def handle_report_frequency(self, config, **kwargs):
         new_schedule = config.get_frequency_display()
-        return f"Updated reporting frequency. New schedule is: {new_schedule} starting on {config.schedule_start}"
+        return _('Updated reporting frequency. New schedule is: {new_schedule} starting on {schedule_start}').format(new_schedule=new_schedule, schedule_start=config.schedule_start)
 
     def handle_skipped_report(self, report, **kwargs):
         if report.skipped:
@@ -396,7 +397,7 @@ class ActivityAdapter(AdapterBase):
 
     def handle_screening_statuses(self, source, old_status, **kwargs):
         new_status = ', '.join([s.title for s in source.screening_statuses.all()])
-        return f'Screening status from {old_status} to {new_status}'
+        return _('Screening status from {old_status} to {new_status}').format(old_status=old_status, new_status=new_status)
 
 
 class SlackAdapter(AdapterBase):
@@ -501,14 +502,14 @@ class SlackAdapter(AdapterBase):
 
     def reviewers_updated(self, source, link, user, added=list(), removed=list(), **kwargs):
         submission = source
-        message = [f'{user} has updated the reviewers on <{link}|{submission.title}>.']
+        message = [_('{user} has updated the reviewers on <{link}|{title}>.').format(user=user, link=link, title=submission.title)]
 
         if added:
-            message.append('Added:')
+            message.append(_('Added:'))
             message.extend(reviewers_message(added))
 
         if removed:
-            message.append('Removed:')
+            message.append(_('Removed:'))
             message.extend(reviewers_message(removed))
 
         return ' '.join(message)
@@ -517,7 +518,7 @@ class SlackAdapter(AdapterBase):
         submissions = sources
         submissions_text = self.slack_links(links, submissions)
         return (
-            '{user} has batch changed lead to {new_lead} on: {submissions_text}'.format(
+            _('{user} has batch changed lead to {new_lead} on: {submissions_text}').format(
                 user=user,
                 submissions_text=submissions_text,
                 new_lead=new_lead,
@@ -528,12 +529,12 @@ class SlackAdapter(AdapterBase):
         submissions = sources
         submissions_text = self.slack_links(links, submissions)
         reviewers_text = ' '.join([
-            f'{str(user)} as {role.name},'
+            _('{user} as {name},').format(user=str(user), name=role.name)
             for role, user in added
             if user
         ])
         return (
-            '{user} has batch added {reviewers_text} as reviewers on: {submissions_text}'.format(
+            _('{user} has batch added {reviewers_text} as reviewers on: {submissions_text}').format(
                 user=user,
                 submissions_text=submissions_text,
                 reviewers_text=reviewers_text,
@@ -551,7 +552,7 @@ class SlackAdapter(AdapterBase):
         ]
         submissions_links = ','.join(submissions_text)
         return (
-            '{user} has transitioned the following submissions: {submissions_links}'.format(
+            _('{user} has transitioned the following submissions: {submissions_links}').format(
                 user=user,
                 submissions_links=submissions_links,
             )
@@ -567,7 +568,7 @@ class SlackAdapter(AdapterBase):
         outcome = determinations[submissions[0].id].clean_outcome
 
         return (
-            'Determinations of {outcome} was sent for: {submissions_links}'.format(
+            _('Determinations of {outcome} was sent for: {submissions_links}').format(
                 outcome=outcome,
                 submissions_links=submissions_links,
             )
@@ -576,7 +577,7 @@ class SlackAdapter(AdapterBase):
     def handle_batch_delete_submission(self, sources, links, user, **kwargs):
         submissions = sources
         submissions_text = ', '.join([submission.title for submission in submissions])
-        return f'{user} has deleted submissions: {submissions_text}'
+        return _('{user} has deleted submissions: {title}').format(user=user, title=submissions_text)
 
     def notify_reviewers(self, source, link, **kwargs):
         submission = source
@@ -590,10 +591,10 @@ class SlackAdapter(AdapterBase):
         )
 
         return (
-            '<{link}|{submission.title}> is ready for review. The following are assigned as reviewers: {reviewers}'.format(
+            _('<{link}|{title}> is ready for review. The following are assigned as reviewers: {reviewers}').format(
                 link=link,
                 reviewers=reviewers,
-                submission=submission,
+                title=submission.title,
             )
         )
 
@@ -701,16 +702,16 @@ class EmailAdapter(AdapterBase):
     def get_subject(self, message_type, source):
         if source:
             if is_ready_for_review(message_type):
-                subject = 'Application ready to review: {source.title}'.format(source=source)
+                subject = _('Application ready to review: {source.title}').format(source=source)
                 if message_type in {MESSAGES.BATCH_READY_FOR_REVIEW}:
-                    subject = 'Multiple applications are now ready for your review'
+                    subject = _('Multiple applications are now ready for your review')
             elif message_type in {MESSAGES.REVIEW_REMINDER}:
-                subject = 'Reminder: Application ready to review: {source.title}'.format(source=source)
+                subject = _('Reminder: Application ready to review: {source.title}').format(source=source)
             else:
                 try:
-                    subject = source.page.specific.subject or 'Your application to {org_long_name}: {source.title}'.format(org_long_name=settings.ORG_LONG_NAME, source=source)
+                    subject = source.page.specific.subject or _('Your application to {org_long_name}: {source.title}').format(org_long_name=settings.ORG_LONG_NAME, source=source)
                 except AttributeError:
-                    subject = 'Your {org_long_name} Project: {source.title}'.format(org_long_name=settings.ORG_LONG_NAME, source=source)
+                    subject = _('Your {org_long_name} Project: {source.title}').format(org_long_name=settings.ORG_LONG_NAME, source=source)
             return subject
 
     def extra_kwargs(self, message_type, source, sources, **kwargs):
@@ -905,27 +906,24 @@ class DjangoMessagesAdapter(AdapterBase):
 
     def batch_reviewers_updated(self, added, sources, **kwargs):
         reviewers_text = ' '.join([
-            f'{str(user)} as {role.name},'
+            _('{user} as {name},').format(user=str(user), name=role.name)
             for role, user in added
             if user
         ])
 
         return (
-            'Batch reviewers added: ' +
-            reviewers_text +
-            ' to ' +
-            ', '.join(['"{}"'.format(source.title) for source in sources])
+            _('Batch reviewers added: {reviewers_text} to ').format(reviewers_text=reviewers_text) + ', '.join(['"{title}"'.format(title=source.title) for source in sources])
         )
 
     def handle_report_frequency(self, config, **kwargs):
         new_schedule = config.get_frequency_display()
-        return f"Successfully updated reporting frequency. They will now report {new_schedule} starting on {config.schedule_start}"
+        return _('Successfully updated reporting frequency. They will now report {new_schedule} starting on {schedule_start}').format(new_schedule=new_schedule, schedule_start=config.schedule_start)
 
     def handle_skipped_report(self, report, **kwargs):
         if report.skipped:
-            return f"Successfully skipped a Report for {report.start_date} to {report.end_date}"
+            return _('Successfully skipped a Report for {start_date} to {end_date}').format(start_date=report.start_date, end_date=report.end_date)
         else:
-            return f"Successfully unskipped a Report for {report.start_date} to {report.end_date}"
+            return _('Successfully unskipped a Report for {start_date} to {end_date}').format(start_date=report.start_date, end_date=report.end_date)
 
     def batch_transition(self, sources, transitions, **kwargs):
         base_message = 'Successfully updated:'
@@ -944,7 +942,7 @@ class DjangoMessagesAdapter(AdapterBase):
         submissions = sources
         outcome = determinations[submissions[0].id].clean_outcome
 
-        base_message = f'Successfully determined as {outcome}: '
+        base_message = _('Successfully determined as {outcome}: ').format(outcome=outcome)
         submissions_text = [
             str(submission.title) for submission in submissions
         ]
